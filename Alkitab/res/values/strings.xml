@@ -212,6 +212,11 @@
     <string name="goto_tab_direct_label">Direct</string>
     <string name="goto_tab_grid_label">Grid</string>
 
+    <string name="search_storage_for_files">Search storage for files</string>
+    <string name="search_storage_no_files_found">No .yes or .yes.gz files found.</string>
+    <string name="search_storage_adding_files">Adding files…</string>
+    <string name="searching_ellipsis">Searching…</string>
+
     <!-- Font Manager -->
     <string name="fm_activity_title">Font Manager</string>
     <string name="fm_need_to_log_in_to_wifi">You need to log-in to your (Wi-Fi) network first.</string>

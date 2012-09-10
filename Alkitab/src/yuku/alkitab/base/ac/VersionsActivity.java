@@ -10,6 +10,9 @@ import android.content.Intent;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
 import android.util.Log;
 import android.view.ContextMenu;
 import android.view.ContextMenu.ContextMenuInfo;
@@ -28,11 +31,15 @@ import android.widget.Toast;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FilenameFilter;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.zip.GZIPInputStream;
 
 import yuku.alkitab.R;
@@ -116,10 +123,183 @@ public class VersionsActivity extends BaseActivity {
 		case R.id.menuTambah:
 			klikPadaBukaFile();
 			return true;
+		case R.id.menuSearchStorage:
+			searchStorageForFiles();
+			return true;
 		}
 		return super.onOptionsItemSelected(item);
 	}
 	
+	private void searchStorageForFiles() {
+		final String searchingPrefix = getString(R.string.searching_ellipsis) + '\n'; 
+		final ProgressDialog pd = ProgressDialog.show(this, null, searchingPrefix, true, true);
+		final boolean[] cancelled = {false};
+		
+		pd.setOnCancelListener(new DialogInterface.OnCancelListener() {
+			@Override public void onCancel(DialogInterface dialog) {
+				cancelled[0] = true;
+			}
+		});
+		
+		new Thread() {
+			Set<String> roots = new TreeSet<String>();
+			Set<String> canons = new TreeSet<String>();
+			String currentDir = "";
+			
+			Handler h = new Handler() {
+				@Override public void handleMessage(Message msg) {
+					pd.setMessage(searchingPrefix + currentDir);
+				}
+			};
+			
+			FilenameFilter filter = new FilenameFilter() {
+				@Override public boolean accept(File dir, String filename) {
+					filename = filename.toLowerCase();
+					return (filename.endsWith(".yes") || filename.endsWith(".yes.gz"));
+				}
+			};
+			
+			void recurse(File dir) {
+				if (cancelled[0]) {
+					return;
+				}
+				
+				Log.d(TAG, "Recursing to dir: " + dir);
+				currentDir = dir.getAbsolutePath();
+				h.sendEmptyMessage(0);
+				
+				File[] subs = dir.listFiles();
+				if (subs != null) {
+					for (File sub: subs) {
+						if (sub.canRead()) {
+							if (sub.isDirectory()) {
+								recurse(sub);
+							} else if (sub.isFile() && filter.accept(sub, sub.getName())) {
+								try {
+									String canon = sub.getCanonicalPath();
+									if (!canons.contains(canon)) {
+										canons.add(canon);
+									}
+								} catch (IOException e) {
+									Log.w(TAG, "Exception when getting canonical path", e);
+								}
+							}
+						}
+					}
+				}
+			}
+			
+			@Override public void run() {
+				String externalStorageDir = Environment.getExternalStorageDirectory().getAbsolutePath();
+				tryAddRoot(externalStorageDir);
+				tryAddRoot(externalStorageDir + "/external_sd"); //$NON-NLS-1$
+				tryAddRoot(externalStorageDir + "/sd"); //$NON-NLS-1$
+				tryAddRoot("/mnt/sdcard"); //$NON-NLS-1$
+				tryAddRoot("/sdcard2"); //$NON-NLS-1$
+				tryAddRoot("/mnt/emmc"); //$NON-NLS-1$
+				tryAddRoot("/mnt/sdcard-ext"); //$NON-NLS-1$
+				tryAddRoot("/mnt/external1");
+				tryAddRoot("/mnt/sdcard2");
+				tryAddRoot("/mnt/extSdCard");
+
+				for (String root: roots) {
+					recurse(new File(root));
+				}
+				
+				pd.dismiss();
+				
+				runOnUiThread(new Runnable() {
+					@Override public void run() {
+						finished();
+					}
+				});
+			};
+			
+			private void tryAddRoot(String dir) {
+				try {
+					File canonRoot = new File(dir).getCanonicalFile();
+					if (canonRoot.isDirectory() && canonRoot.canRead()) {
+						roots.add(canonRoot.getAbsolutePath());
+					}
+				} catch (IOException e) {
+					Log.d(TAG, "no canonical path for: " + dir);
+				}
+			}
+
+			void finished() {
+				if (cancelled[0]) {
+					// cancelled by user, don't do anything
+				} else {
+					if (canons.size() == 0) {
+						new AlertDialog.Builder(VersionsActivity.this)
+						.setMessage(getString(R.string.search_storage_no_files_found))
+						.setPositiveButton(R.string.ok, null)
+						.show();
+					} else {
+						final String[] items = canons.toArray(new String[canons.size()]);
+						final boolean[] checkeds = new boolean[items.length];
+						for (int i = 0; i < checkeds.length; i++) checkeds[i] = true;
+						
+						new AlertDialog.Builder(VersionsActivity.this)
+						.setMultiChoiceItems(items, checkeds, new DialogInterface.OnMultiChoiceClickListener() {
+							@Override public void onClick(DialogInterface dialog, int which, boolean isChecked) {
+								checkeds[which] = isChecked;
+							}
+						}) 
+						.setPositiveButton(R.string.ok, new DialogInterface.OnClickListener() {
+							@Override public void onClick(DialogInterface dialog, int which) {
+								List<String> yeses = new ArrayList<String>();
+								
+								for (int i = 0; i < checkeds.length; i++) {
+									if (checkeds[i]) {
+										String item = items[i];
+										if (S.getDb().adakahEdisiYesDenganNamafile(item)) {
+											// we have this already, skip!
+											Log.d(TAG, "Already registered: " + item);
+										} else {
+											yeses.add(item);
+										}
+									}
+								}
+								
+								if (yeses.size() > 0) {
+									addYesFilesFromSearchStorage(yeses);
+								}
+							}
+						})
+						.setNegativeButton(R.string.cancel, null)
+						.show();
+					}
+				}
+			}
+		}.start();
+	}
+	
+	void addYesFilesFromSearchStorage(final List<String> yeses) {
+		final ProgressDialog pd = ProgressDialog.show(this, null, getString(R.string.search_storage_adding_files), true, true);
+		final boolean[] cancelled = {false};
+		
+		pd.setOnCancelListener(new DialogInterface.OnCancelListener() {
+			@Override public void onCancel(DialogInterface dialog) {
+				cancelled[0] = true;
+			}
+		});
+		
+		new Thread() {
+			@Override public void run() {
+				for (String yes: yeses) {
+					if (cancelled[0]) {
+						break;
+					}
+					
+					handleFileOpenYesOrYesGz(yes);
+				}
+				
+				pd.dismiss();
+			};
+		}.start();
+	}
+
 	private OnItemClickListener lsEdisi_itemClick = new OnItemClickListener() {
 		@Override
 		public void onItemClick(AdapterView<?> parent, View v, int position, long id) {
@@ -379,55 +559,13 @@ public class VersionsActivity extends BaseActivity {
 				return;
 			}
 		
-			final String filename = result.firstFilename;
+			final String filename = result.firstFilename.toLowerCase();
 			
-			if (filename.toLowerCase().endsWith(".yes.gz")) { //$NON-NLS-1$
-				// decompress or see if the same filename without .gz exists
-				final File maybeDecompressed = new File(filename.substring(0, filename.length() - 3));
-				if (maybeDecompressed.exists() && !maybeDecompressed.isDirectory() && maybeDecompressed.canRead()) {
-					handleFileOpenYes(maybeDecompressed.getAbsolutePath(), null);
-				} else {
-					final ProgressDialog pd = ProgressDialog.show(VersionsActivity.this, null, getString(R.string.sedang_mendekompres_harap_tunggu), true, false);
-					new AsyncTask<Void, Void, File>() {
-						@Override protected File doInBackground(Void... params) {
-							String tmpfile3 = filename + "-" + (int)(Math.random() * 100000) + ".tmp3"; //$NON-NLS-1$ //$NON-NLS-2$
-							try {
-								GZIPInputStream in = new GZIPInputStream(new FileInputStream(filename));
-								FileOutputStream out = new FileOutputStream(tmpfile3); // decompressed file
-								
-								// Transfer bytes from the compressed file to the output file
-								byte[] buf = new byte[4096 * 4];
-								while (true) {
-									int len = in.read(buf);
-									if (len <= 0) break;
-									out.write(buf, 0, len);
-								}
-								out.close();
-								in.close();
-								
-								boolean renameOk = new File(tmpfile3).renameTo(maybeDecompressed);
-								if (!renameOk) {
-									throw new RuntimeException("Gagal rename!"); //$NON-NLS-1$
-								}
-							} catch (Exception e) {
-								return null;
-							} finally {
-								Log.d(TAG, "menghapus tmpfile3: " + tmpfile3); //$NON-NLS-1$
-								new File(tmpfile3).delete();
-							}
-							return maybeDecompressed;
-						}
-						
-						@Override protected void onPostExecute(File result) {
-							pd.dismiss();
-							
-							handleFileOpenYes(result.getAbsolutePath(), null);
-						};
-					}.execute();
-				}
-			} else if (filename.toLowerCase().endsWith(".yes")) { //$NON-NLS-1$
+			if (filename.endsWith(".yes.gz")) { //$NON-NLS-1$
+				handleFileOpenYesOrYesGz(filename);
+			} else if (filename.endsWith(".yes")) { //$NON-NLS-1$
 				handleFileOpenYes(filename, null);
-			} else if (filename.toLowerCase().endsWith(".pdb")) { //$NON-NLS-1$
+			} else if (filename.endsWith(".pdb")) { //$NON-NLS-1$
 				handleFileOpenPdb(filename);
 			} else {
 				Toast.makeText(getApplicationContext(), R.string.ed_invalid_file_selected, Toast.LENGTH_SHORT).show();
@@ -435,7 +573,70 @@ public class VersionsActivity extends BaseActivity {
 		}
 	}
 	
-	void handleFileOpenYes(String filename, String namapdbasal) {
+	File decompressYesGz(final String filename, final File maybeDecompressed) {
+		String tmpfile3 = filename + "-" + (int)(Math.random() * 100000) + ".tmp3"; //$NON-NLS-1$ //$NON-NLS-2$
+		try {
+			GZIPInputStream in = new GZIPInputStream(new FileInputStream(filename));
+			FileOutputStream out = new FileOutputStream(tmpfile3); // decompressed file
+			
+			// Transfer bytes from the compressed file to the output file
+			byte[] buf = new byte[4096 * 4];
+			while (true) {
+				int len = in.read(buf);
+				if (len <= 0) break;
+				out.write(buf, 0, len);
+			}
+			out.close();
+			in.close();
+			
+			boolean renameOk = new File(tmpfile3).renameTo(maybeDecompressed);
+			if (!renameOk) {
+				throw new RuntimeException("Gagal rename!"); //$NON-NLS-1$
+			}
+			return maybeDecompressed;
+		} catch (Exception e) {
+			return null;
+		} finally {
+			Log.d(TAG, "menghapus tmpfile3: " + tmpfile3); //$NON-NLS-1$
+			new File(tmpfile3).delete();
+		}
+	}
+	
+	void handleFileOpenYesOrYesGz(final String filename_) {
+		String filename = filename_.toLowerCase();
+		if (filename.endsWith(".yes")) {
+			handleFileOpenYes(filename, null);
+			return;
+		}
+		
+		if (filename.endsWith(".yes.gz")) { //$NON-NLS-1$
+			// decompress or see if the same filename without .gz exists
+			final File maybeDecompressed = new File(filename.substring(0, filename.length() - 3));
+			if (maybeDecompressed.exists() && !maybeDecompressed.isDirectory() && maybeDecompressed.canRead()) {
+				handleFileOpenYes(maybeDecompressed.getAbsolutePath(), null);
+			} else {
+				if (Looper.myLooper() != null) {
+					final ProgressDialog pd = ProgressDialog.show(VersionsActivity.this, null, getString(R.string.sedang_mendekompres_harap_tunggu), true, false);
+					new AsyncTask<Void, Void, File>() {
+						@Override protected File doInBackground(Void... params) {
+							return decompressYesGz(filename_, maybeDecompressed);
+						}
+	
+						@Override protected void onPostExecute(File result) {
+							pd.dismiss();
+							
+							handleFileOpenYes(result.getAbsolutePath(), null);
+						};
+					}.execute();
+				} else {
+					File decompressed = decompressYesGz(filename, maybeDecompressed);
+					handleFileOpenYes(decompressed.getAbsolutePath(), null);
+				}
+			}
+		}
+	}
+
+	void handleFileOpenYes(final String filename, String namapdbasal) {
 		{ // cari dup
 			boolean dup = false;
 			BuildConfig c = BuildConfig.get(getApplicationContext());
@@ -449,10 +650,14 @@ public class VersionsActivity extends BaseActivity {
 			if (!dup) dup = S.getDb().adakahEdisiYesDenganNamafile(filename);
 			
 			if (dup) {
-				new AlertDialog.Builder(this)
-				.setMessage(getString(R.string.ed_file_file_sudah_ada_dalam_daftar_versi, filename))
-				.setPositiveButton(R.string.ok, null)
-				.show();
+				runOnUiThread(new Runnable() {
+					@Override public void run() {
+						new AlertDialog.Builder(VersionsActivity.this)
+						.setMessage(getString(R.string.ed_file_file_sudah_ada_dalam_daftar_versi, filename))
+						.setPositiveButton(R.string.ok, null)
+						.show();
+					}
+				});
 				return;
 			}
 		}
@@ -473,12 +678,16 @@ public class VersionsActivity extends BaseActivity {
 			S.getDb().tambahEdisiYesDenganAktif(yes, true);
 			adapter.initDaftarEdisiYes();
 			adapter.notifyDataSetChanged();
-		} catch (Exception e) {
-			new AlertDialog.Builder(this)
-			.setTitle(R.string.ed_error_encountered)
-			.setMessage(e.getClass().getSimpleName() + ": " + e.getMessage()) //$NON-NLS-1$
-			.setPositiveButton(R.string.ok, null)
-			.show();
+		} catch (final Exception e) {
+			runOnUiThread(new Runnable() {
+				@Override public void run() {
+					new AlertDialog.Builder(VersionsActivity.this)
+					.setTitle(R.string.ed_error_encountered)
+					.setMessage(e.getClass().getSimpleName() + ": " + e.getMessage()) //$NON-NLS-1$
+					.setPositiveButton(R.string.ok, null)
+					.show();
+				}
+			});
 		}
 	}
 
