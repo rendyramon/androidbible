@@ -24,6 +24,7 @@ public class BuildConfig {
 	public boolean menuHelp;
 	public boolean menuDonation;
 	public boolean menuSongs;
+	public boolean menuAudio;
 	public List<MVersionPreset> presets;
 	public String url_prefix;
 	public String url_format;
@@ -77,6 +78,9 @@ public class BuildConfig {
 				res.menuGebug = parser.getAttributeBooleanValue(null, "gebug", false); //$NON-NLS-1$
 				res.menuDevotion = parser.getAttributeBooleanValue(null, "renungan", false); //$NON-NLS-1$
 				res.menuSongs = parser.getAttributeBooleanValue(null, "songs", false); //$NON-NLS-1$
+
+				/*gak ngerti jadi ikut yg diatas*/
+				res.menuAudio = parser.getAttributeBooleanValue(null, "donasi", false); //$NON-NLS-1$
 			} else if (next == XmlPullParser.START_TAG && "internal".equals(parser.getName())) { //$NON-NLS-1$
 				res.internalShortName = parser.getAttributeValue(null, "shortName"); //$NON-NLS-1$
 				res.internalLongName = parser.getAttributeValue(null, "longName"); //$NON-NLS-1$

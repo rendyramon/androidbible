@@ -50,6 +50,7 @@ import yuku.afw.storage.Preferences;
 import yuku.alkitab.R;
 import yuku.alkitab.base.IsiActivity.FakeContextMenu.Item;
 import yuku.alkitab.base.ac.AboutActivity;
+import yuku.alkitab.base.ac.AudioActivity;
 import yuku.alkitab.base.ac.BookmarkActivity;
 import yuku.alkitab.base.ac.DevotionActivity;
 import yuku.alkitab.base.ac.GotoActivity;
@@ -1029,6 +1030,7 @@ public class IsiActivity extends BaseActivity {
 		menu.findItem(R.id.menuBantuan).setVisible(c.menuHelp);
 		menu.findItem(R.id.menuDonasi).setVisible(c.menuDonation);
 		menu.findItem(R.id.menuSongs).setVisible(c.menuSongs);
+		menu.findItem(R.id.menuAudio).setVisible(c.menuAudio);		
 	}
 	
 	@Override public boolean onCreateOptionsMenu(Menu menu) {
@@ -1061,12 +1063,16 @@ public class IsiActivity extends BaseActivity {
 		case R.id.menuSongs: 
 			startActivityForResult(SongViewActivity.createIntent(), REQCODE_songs);
 			return true;
+		case R.id.menuAudio:
+			Log.d("Audio", "Bisa!!");
+			startActivity(new Intent(this, AudioActivity.class));
+			return true;
 		case R.id.menuTentang:
 			startActivity(new Intent(this, AboutActivity.class));
 			return true;
 		case R.id.menuPengaturan:
 			startActivityForResult(new Intent(this, SettingsActivity.class), REQCODE_settings);
-			return true;
+			return true;	
 		case R.id.menuBantuan:
 			startActivity(new Intent(this, HelpActivity.class));
 			return true;
