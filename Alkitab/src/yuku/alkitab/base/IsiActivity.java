@@ -36,6 +36,8 @@ import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.ListAdapter;
 import android.widget.ListView;
+import android.widget.RelativeLayout;
+import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -70,6 +72,7 @@ import yuku.alkitab.base.config.BuildConfig;
 import yuku.alkitab.base.dialog.TypeBookmarkDialog;
 import yuku.alkitab.base.dialog.TypeHighlightDialog;
 import yuku.alkitab.base.dialog.TypeNoteDialog;
+import yuku.alkitab.base.media.AlkitabAudio;
 import yuku.alkitab.base.model.Ari;
 import yuku.alkitab.base.model.Book;
 import yuku.alkitab.base.model.PericopeBlock;
@@ -113,10 +116,13 @@ public class IsiActivity extends BaseActivity {
 	Button bGoto;
 	ImageButton bLeft;
 	ImageButton bRight;
+	ImageButton playPause;
 	View titleContainer;
 	TextView lTitle;
 	View bContextMenu;
 	View root;
+	View aPlayer;
+	SeekBar seek;
 	
 	int chapter_1 = 0;
 	SharedPreferences instant_pref;
@@ -158,6 +164,9 @@ public class IsiActivity extends BaseActivity {
 		lTitle = V.get(this, R.id.lJudul);
 		bContextMenu = V.get(this, R.id.bContext);
 		root = V.get(this, R.id.root);
+		playPause = V.get(this, R.id.ButtonPlayPause);
+		seek = V.get(this, R.id.SeekBarPlay);
+		aPlayer = V.get(this, R.id.audioPlayer);
 		
 		applyPreferences(false);
 
@@ -1064,8 +1073,14 @@ public class IsiActivity extends BaseActivity {
 			startActivityForResult(SongViewActivity.createIntent(), REQCODE_songs);
 			return true;
 		case R.id.menuAudio:
-			Log.d("Audio", "Bisa!!");
-			startActivity(new Intent(this, AudioActivity.class));
+			if (aPlayer.isShown()) aPlayer.setVisibility(View.GONE);
+			else aPlayer.setVisibility(View.VISIBLE);
+/*			
+			String url = AlkitabAudio.getAudioURL(S.activeBook, chapter_1);
+									
+			Intent intent = new Intent(this, AudioActivity.class);
+			intent.putExtra("url", url);
+			startActivity(intent);*/
 			return true;
 		case R.id.menuTentang:
 			startActivity(new Intent(this, AboutActivity.class));

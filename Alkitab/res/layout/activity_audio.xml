@@ -4,11 +4,13 @@
 	android:layout_width="fill_parent" 
 	android:layout_height="fill_parent" 
 	android:focusable="true">
-	<EditText 
-		android:text="The song URL" 
-		android:layout_width="fill_parent" 
-		android:layout_height="wrap_content" 
-		android:id="@+id/EditTextSongURL"/>	
+
+	<EditText
+	    android:id="@+id/EditTextSongURL"
+	    android:layout_width="fill_parent"
+	    android:layout_height="wrap_content"
+	    android:hint="Audio URL" />
+	
 	<ImageButton 
 		android:layout_below="@+id/EditTextSongURL"
 		android:id="@+id/ButtonTestPlayPause" 
@@ -20,14 +22,6 @@
 		android:id="@+id/SeekBarTestPlay" 
 		android:layout_height="wrap_content" 
 		android:layout_width="match_parent"
-		android:thumb="@drawable/thumb_transparent"/>	<Button
-	    android:id="@+id/btnPlayPause"
-	    android:layout_width="wrap_content"
-	    android:layout_height="wrap_content"
-	    android:layout_below="@+id/SeekBarTestPlay"
-	    android:layout_centerHorizontal="true"
-	    android:layout_marginTop="36dp"
-	    android:onClick="btnPlayPause_onClick"
-	    android:text="Play" />
+		android:thumb="@drawable/thumb_transparent"/>
 
 </RelativeLayout>
