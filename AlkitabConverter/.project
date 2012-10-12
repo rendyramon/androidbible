@@ -3,6 +3,7 @@
 	<name>AlkitabConverter</name>
 	<comment></comment>
 	<projects>
+		<project>BintexWriter</project>
 	</projects>
 	<buildSpec>
 		<buildCommand>
