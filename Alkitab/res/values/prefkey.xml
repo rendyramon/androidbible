@@ -12,6 +12,9 @@
 	<string name="pref_sortKitabAlfabet_key">sortKitabAlfabet</string>
 	<bool name="pref_sortKitabAlfabet_default">false</bool>
 	
+	<string name="pref_kualitasAudio_key">kualitasAudio</string>
+	<bool name="pref_kualitasAudio_default">true</bool>
+	
 	<string name="pref_bahasa_key">bahasa</string>
 	<!-- ditentukan di bahasa_default.xml : pref_bahasa_default -->
 	

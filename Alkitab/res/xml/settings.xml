@@ -98,4 +98,13 @@
 			android:entryValues="@array/pref_tombolVolumeBuatPindah_values"
 		/>
 	</PreferenceCategory>
+	
+	<PreferenceCategory
+		android:title="Audio">
+		<CheckBoxPreference
+			android:defaultValue="true"
+			android:title="@string/pref_kualitasAudio_title"
+			android:key="@string/pref_kualitasAudio_key"
+			android:summary="@string/pref_tampilkan_kitab_dalam_urutan_abjad_bukan_urutan_aslinya" />		
+	</PreferenceCategory>
 </PreferenceScreen>

@@ -30,6 +30,11 @@ public class AlkitabAudio {
 		else bnum = "" + booknum;
 		
 		String shortname = judul.substring(0, 3);
+		
+		if (shortname.equals("maz")) shortname = "mzm";
+		else if (shortname.equals("pen")) shortname = "pkh";
+		else if (shortname.equals("mar")) shortname = "mrk";
+		
 		String chap;		
 		
 		if (chapter < 10) chap = "0" + chapter;
