@@ -36,22 +36,13 @@
             android:background="#000"
             tools:ignore="PxUsage" />
     </LinearLayout>
-
+
     <RelativeLayout
         android:id="@+id/audioPlayer"
         android:layout_width="match_parent"
         android:layout_height="50dp"
         android:focusable="true"
         android:visibility="gone" >
-
-        <ImageButton
-            android:id="@+id/ButtonPlayPause"
-            android:layout_height="wrap_content"
-            android:layout_width="wrap_content"
-            android:layout_above="@+id/SeekBarPlay"
-            android:layout_alignParentTop="true"
-            android:layout_centerInParent="true"
-            android:src="@drawable/button_play" />
 
         <SeekBar
             android:id="@+id/SeekBarPlay"
@@ -61,6 +52,36 @@
             android:layout_alignParentLeft="true"
             android:minHeight="10dip"
             android:thumb="@drawable/thumb_transparent" />
+
+        <ImageButton
+            android:id="@+id/ButtonPlayPause"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_above="@+id/SeekBarPlay"
+            android:layout_alignParentLeft="true"
+            android:layout_marginLeft="18dp"
+            android:src="@drawable/button_play" />
+
+        <TextView
+            android:id="@+id/tProgress"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:layout_marginLeft="15dp"
+            android:layout_toRightOf="@+id/ButtonPlayPause"
+            android:text="0.0 kb" />
+
+        <Button
+            android:id="@+id/bStart"
+            style="?android:attr/buttonStyleSmall"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignBaseline="@+id/tProgress"
+            android:layout_alignBottom="@+id/tProgress"
+            android:layout_alignParentRight="true"
+            android:layout_marginRight="14dp"
+            android:onClick="bStart_onClick"
+            android:text="Start" />
 
     </RelativeLayout>
 

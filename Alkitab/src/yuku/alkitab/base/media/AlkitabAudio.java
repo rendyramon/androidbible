@@ -30,17 +30,21 @@ public class AlkitabAudio {
 		else bnum = "" + booknum;
 		
 		String shortname = judul.substring(0, 3);
+		String chap = "";
 		
-		if (shortname.equals("maz")) shortname = "mzm";
-		else if (shortname.equals("pen")) shortname = "pkh";
-		else if (shortname.equals("mar")) shortname = "mrk";
+		Log.d("Audio", "Chap: " + chap);
 		
-		String chap;		
-		
-		if (chapter < 10) chap = "0" + chapter;
+		if (chapter < 10) chap = "0" + chap + chapter;		
 		else chap = "" + chapter;
 		
-		newurl = newurl + plpb + "/mp3/cd/" + bnum + "_" + judul + "/" + bnum + "_" + shortname + chap + ".mp3";
+		if (shortname.equals("maz")){
+			shortname = "mzm";
+			if (chapter < 100) chap = "0" + chap;
+		}		
+		else if (shortname.equals("pen")) shortname = "pkh";
+		else if (shortname.equals("mar")) shortname = "mrk";						
+		
+		newurl = newurl + plpb + "/mp3/mobile/" + bnum + "_" + judul + "/" + bnum + "_" + shortname + chap + ".mp3";
 			
 		return newurl;
 	}
