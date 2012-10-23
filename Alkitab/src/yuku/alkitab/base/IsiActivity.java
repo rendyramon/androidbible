@@ -62,6 +62,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.StreamCorruptedException;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
@@ -105,6 +106,7 @@ import yuku.alkitab.base.model.Ari;
 import yuku.alkitab.base.model.Book;
 import yuku.alkitab.base.model.PericopeBlock;
 import yuku.alkitab.base.model.Version;
+import yuku.alkitab.base.rpc.SimpleHttpConnection;
 import yuku.alkitab.base.storage.Db;
 import yuku.alkitab.base.util.History;
 import yuku.alkitab.base.util.IntArrayList;
@@ -139,7 +141,7 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 	private static final int REQCODE_search = 6;
 	private static final int REQCODE_share = 7;
 	private static final int REQCODE_songs = 8;
-	private static final int INTIAL_KB_BUFFER = 128;
+	private static final int INTIAL_KB_BUFFER = 64;
 
 	private static final String EXTRA_verseUrl = "urlAyat"; //$NON-NLS-1$
 	private int mediaFileLength;
@@ -147,13 +149,13 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 	private int counter = 0;
 	private int nread = 0;
 	private long mediaLengthInKb;
-	private boolean isInterrupted;
+	private boolean isInterrupted = false;
 	private boolean mpSet = false;
 	private File downloadFile;
-	private final Handler handler = new Handler();
+	private Handler handler = new Handler();
 
 	ListView lsText;
-	Button bGoto, bStart;
+	Button bGoto;
 	ImageButton bLeft;
 	ImageButton bRight;
 	ImageButton playPause;
@@ -211,11 +213,10 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 		// seek = V.get(this, R.id.SeekBarPlay);
 		aPlayer = V.get(this, R.id.audioPlayer);
 		tProgress = V.get(this, R.id.tProgress);
-		bStart = V.get(this, R.id.bStart);
 
 		// audioPlayer
 		playPause = (ImageButton) findViewById(R.id.ButtonPlayPause);
-		playPause.setOnClickListener(this);
+		// playPause.setOnClickListener(this);
 
 		seek = (SeekBar) findViewById(R.id.SeekBarPlay);
 		seek.setMax(99); // It means 100% .0-99
@@ -1518,8 +1519,8 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 		lTitle.setText(title);
 		bGoto.setText(title);
 
-		
-		//reset mediaplayer
+		// reset mediaplayer
+		playPause.setEnabled(true);
 		if (mediaPlayer == null) {
 			Log.d("info", "MediaPlayer Null!!");
 			// createMP();
@@ -1527,12 +1528,13 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 			if (mediaPlayer.isPlaying()) {
 				mediaPlayer.stop();
 			}
+			isInterrupted = true;
 			seek.setSecondaryProgress(0);
 			seek.setProgress(0);
+
+			tProgress.setText("0.0 Kb");
 			playPause.setImageResource(R.drawable.button_play);
-			bStart.setText("Start");
 			mediaPlayer.reset();
-			nread = 0;
 			// mediaPlayer.release();
 			mpSet = false;
 
@@ -1673,9 +1675,12 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 	 * position
 	 */
 	private void primarySeekBarProgressUpdater() {
-		mediaFileLength = mediaPlayer.getDuration();
-		seek.setProgress((int) (((float) mediaPlayer.getCurrentPosition() / mediaFileLength) * 100)); // This
-																										// "was playing"/"song length"
+		if (mediaPlayer != null) {
+			mediaFileLength = mediaPlayer.getDuration();
+
+			seek.setProgress((int) (((float) mediaPlayer.getCurrentPosition() / mediaFileLength) * 100));
+		}
+
 		if (mediaPlayer.isPlaying()) {
 			Runnable notification = new Runnable() {
 				public void run() {
@@ -1704,7 +1709,9 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 		 * playing is complete
 		 */
 		playPause.setImageResource(R.drawable.button_play);
-		Log.d("info", "Completed!!");
+		seek.setSecondaryProgress(0);
+		seek.setProgress(0);
+		primarySeekBarProgressUpdater();
 	}
 
 	@Override
@@ -1726,18 +1733,29 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 	}
 
 	public static boolean checkURL(String URLName) {
+		String resp = null;
+		boolean stat = false;
+		long startTime = System.currentTimeMillis();
 		try {
-			HttpURLConnection.setFollowRedirects(false);
-			// note : you may also need
-			// HttpURLConnection.setInstanceFollowRedirects(false)
-			HttpURLConnection con = (HttpURLConnection) new URL(URLName)
-					.openConnection();
-			con.setRequestMethod("HEAD");
-			return (con.getResponseCode() == HttpURLConnection.HTTP_OK);
-		} catch (Exception e) {
+			URL u = new URL(URLName);
+			HttpURLConnection huc = (HttpURLConnection) u.openConnection();
+			huc.setRequestMethod("GET");
+			huc.connect();
+			resp = huc.getResponseMessage();
+			if ((resp.equals(null)) || (resp.equals("Not Found"))) {
+				stat = false;
+			} else {
+				stat = true;
+			}
+		} catch (IOException e) {
 			e.printStackTrace();
-			return false;
+			stat = false;
 		}
+
+		long endTime = System.currentTimeMillis() - startTime;
+		Log.d("info", "resp " + resp);
+		Log.d("info", "time " + endTime);
+		return stat;
 	}
 
 	public void startStream() {
@@ -1747,63 +1765,60 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 		Log.d("Audio", url);
 		Log.d("Audio", title);
 
-		Runnable r = new Runnable() {
-			public void run() {
-				createFile(url);
-			}
-		};
-		new Thread(r).start();
+		if (checkURL(url)) {
+			Runnable r = new Runnable() {
+				public void run() {
+					Log.d("info", "Running!");
+					createFile(url);
+				}
+			};
+			new Thread(r).start();
+		} else {
+			Log.d("Audio", "Tidak Bisa");
+			new AlertDialog.Builder(IsiActivity.this).setTitle("Audio")
+					.setMessage("Audio tidak tersedia untuk " + title)
+					.setPositiveButton("OK", null).show();
+		}
 	}
 
 	public void bStart_onClick(View v) throws IOException {
 		Log.d("info", "" + mpSet);
 		if (mpSet == false) {
 			startStream();
+			isInterrupted = false;
+			playPause.setEnabled(false);
 		} else {
 			if (!mediaPlayer.isPlaying()) {
 				mediaPlayer.start();
 				playPause.setImageResource(R.drawable.button_pause);
-				bStart.setText("Pause");
 			} else {
 				mediaPlayer.pause();
 				playPause.setImageResource(R.drawable.button_play);
-				bStart.setText("Play");
 			}
 		}
 	}
 
 	public void createFile(String url) {
 		try {
-			HttpClient client = new DefaultHttpClient();
-			HttpGet get = new HttpGet(url);
+			SimpleHttpConnection conn = new SimpleHttpConnection(url);
 
-			HttpResponse response = client.execute(get);
-			HttpEntity entity = response.getEntity();
-
-			InputStream content = entity.getContent();
+			InputStream content = conn.load();
 
 			if (content == null) {
 				Log.e(getClass().getName(),
 						"Unable to create InputStream for mediaUrl:" + url);
+
 			}
+			// long fileSize = entity.getContentLength();
 
-			long fileSize = entity.getContentLength();
-
-			mediaLengthInKb = fileSize / 1024;
-
-			Log.d("download", "" + fileSize);
-
-			// File tmp = new File(Environment.getExternalStorageDirectory(),
-			// "bible/tmp/");
+			mediaLengthInKb = conn.getContentLength() / 1024;
 
 			// create download file
-			// downloadFile = File.createTempFile("downloaded", ".mp3", tmp);
 			downloadFile = new File(Environment.getExternalStorageDirectory(),
 					"bible/new/downloaded" + (counter++) + ".mp3");
 
 			// if (downloadFile.exists()) downloadFile.delete();
 
-		
 			FileOutputStream out = new FileOutputStream(downloadFile);
 
 			// read from URL
@@ -1811,28 +1826,26 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 			int totalBytesRead = 0;
 			int incrementBytes = 0;
 
-			while (true) {
+			while (notInterrupted()) {
 				nread = content.read(buf);
 				if (nread <= 0)
 					break;
-				else {
-					out.write(buf, 0, nread);
+				out.write(buf, 0, nread);
 
-					totalBytesRead += nread;
-					incrementBytes += nread;
-					totalKbRead = totalBytesRead / 1024;
+				totalBytesRead += nread;
+				incrementBytes += nread;
+				totalKbRead = totalBytesRead / 1024;
 
-					testMediaBuffer();
-					fireDataLoadUpdate();
-				}
-
+				testMediaBuffer();
+				fireDataLoadUpdate();
 			}
 
 			// fireDataFullyLoaded();
 			content.close();
 			out.close();
-			if (notInterrupted())
+			if (notInterrupted()){
 				fireDataFullyLoaded();
+			}
 
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
@@ -1848,6 +1861,7 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 				mediaPlayer.pause();
 				// mediaPlayer.release();
 			}
+			Log.d("info", "interrupted!!");
 			return false;
 		} else {
 			return true;
@@ -1891,27 +1905,8 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 		try {
 			File bufferedFile = new File(getExternalCacheDir(), "buf_"
 					+ (counter++) + ".mp3");
-			bufferedFile = File.createTempFile("buf_" + (counter++), ".mp3");
-			// if (bufferedFile.exists()) bufferedFile.delete();
-			// bufferedFile = File.createTempFile("buf" + (counter++), ".mp3");
-			// File bufferedFile = new
-			// File(getApplicationContext().getCacheDir(),"playingMedia" +
-			// (counter++) + ".mp3");
 
-			// We double buffer the data to avoid potential read/write errors
-			// that could happen if the
-			// download thread attempted to write at the same time the
-			// MediaPlayer was trying to read.
-			// For example, we can't guarantee that the MediaPlayer won't open a
-			// file for playing and leave it locked while
-			// the media is playing. This would permanently deadlock the file
-			// download. To avoid such a deadloack,
-			// we move the currently loaded data to a temporary buffer file that
-			// we start playing while the remaining
-			// data downloads.
 			moveFile(downloadFile, bufferedFile);
-
-			Log.d("downloads", bufferedFile.getPath());
 
 			Log.e(getClass().getName(),
 					"Buffered File path: " + bufferedFile.getAbsolutePath());
@@ -1919,26 +1914,19 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 					"Buffered File length: " + bufferedFile.length() + "");
 
 			// We have pre-loaded enough content and started the MediaPlayer so
-			// update the buttons & progress meters.			
-			
+			// update the buttons & progress meters.
+
 			mediaPlayer = createMediaPlayer(bufferedFile.getAbsolutePath());
 
-			/*
-			 * mediaPlayer = new MediaPlayer(); // createMP();
-			 * 
-			 * FileInputStream fis = new FileInputStream(bufferedFile);
-			 */
-			// mediaPlayer.setDataSource(bufferedFile.getAbsolutePath());
 			mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
 			mediaPlayer.setOnPreparedListener(this);
 			mediaPlayer.prepare();
 
 			mpSet = true;
 
-
 			// mediaPlayer.start();
 
-//			primarySeekBarProgressUpdater();
+			// primarySeekBarProgressUpdater();
 
 			// fireDataPreloadComplete();
 
@@ -1953,7 +1941,7 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 		Runnable updater = new Runnable() {
 			public void run() {
 				tProgress
-						.setText((totalKbRead + " of " + mediaLengthInKb + " Kb read"));
+						.setText((totalKbRead + " of " + mediaLengthInKb + " Kb"));
 				float loadProgress = ((float) totalKbRead / (float) mediaLengthInKb);
 				seek.setSecondaryProgress((int) (loadProgress * 100));
 			}
@@ -1979,35 +1967,12 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 
 				// Delete the downloaded File as it's now been transferred to
 				// the currently playing buffer file.
-//				downloadFile.delete();
-				tProgress.setText("Audio full loaded: " + totalKbRead
-						+ " Kb read");
+				downloadFile.delete();
+				tProgress.setText(totalKbRead + " of " + mediaLengthInKb
+						+ " Kb");
 			}
 		};
 		handler.post(updater);
-	}
-
-	private void getDirSize(File tdir) {
-		long result = 0;
-
-		Stack<File> dirlist = new Stack<File>();
-		dirlist.clear();
-
-		dirlist.push(tdir);
-
-		while (!dirlist.isEmpty()) {
-			File dirCurrent = dirlist.pop();
-
-			File[] fileList = dirCurrent.listFiles();
-			for (int i = 0; i < fileList.length; i++) {
-
-				if (fileList[i].isDirectory())
-					dirlist.push(fileList[i]);
-				else
-					result += fileList[i].length();
-			}
-		}
-		Log.d("downloads", "dir: " + tdir + " result: " + result);
 	}
 
 	private void transferBufferToMediaPlayer() {
@@ -2025,10 +1990,10 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 			// Copy the currently downloaded content to a new buffered File.
 			// Store the old File for deleting later.
 
-			File bufferedFile = new File(
-					Environment.getExternalStorageDirectory(), "buf_"
-							+ (counter++) + ".mp3");
-			bufferedFile = File.createTempFile("buf_" + (counter++), ".mp3", bufferedFile);
+			File bufferedFile = new File(getExternalCacheDir(), "buf2_"
+					+ (counter++) + ".mp3");
+			// bufferedFile = File.createTempFile("buf_" + (counter++), ".mp3",
+			// bufferedFile);
 
 			moveFile(downloadFile, bufferedFile);
 
@@ -2043,7 +2008,7 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 			mediaPlayer.prepare();
 
 			mediaPlayer.seekTo(curPosition);
-					
+
 			// getDirSize(oldBufferedFile);
 			// getDirSize(bufferedFile);
 
@@ -2052,9 +2017,10 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 			// NOTE: We test for < 1second of data because the media player can
 			// stop when there is still
 			// a few milliseconds of data left to play
-			boolean atEndOfFile = mediaPlayer.getDuration() - mediaPlayer.getCurrentPosition() <= 1000;
+			boolean atEndOfFile = mediaPlayer.getDuration()
+					- mediaPlayer.getCurrentPosition() <= 1000;
 			if (wasPlaying || atEndOfFile) {
-				onPrepared(mediaPlayer);
+				mediaPlayer.start();
 				Log.d("testdownload", "Its Starting!!");
 			}
 
@@ -2078,7 +2044,8 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 				return false;
 			}
 		});
-		
+		mPlayer.setOnBufferingUpdateListener(this);
+		mPlayer.setOnCompletionListener(this);
 		// FileInputStream fis = new FileInputStream(mediaFile);
 		mPlayer.setDataSource(mediaFile);
 		return mPlayer;
@@ -2125,126 +2092,148 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 		}
 	}
 
+	@Override
+	protected void onDestroy() {
+		// TODO Auto-generated method stub
+		super.onDestroy();
+		if (mediaPlayer != null)
+			mediaPlayer.release();
+	}
+
+	@Override
+	public void onPrepared(MediaPlayer mp) {
+		// TODO Auto-generated method stub
+		Log.d("Audio", "prepared!!");
+		mp.start();
+		playPause.setEnabled(true);
+		playPause.setImageResource(R.drawable.button_pause);
+		primarySeekBarProgressUpdater();
+	}
+
+	// gak dipake
+	private void getDirSize(File tdir) {
+		long result = 0;
+
+		Stack<File> dirlist = new Stack<File>();
+		dirlist.clear();
+
+		dirlist.push(tdir);
+
+		while (!dirlist.isEmpty()) {
+			File dirCurrent = dirlist.pop();
+
+			File[] fileList = dirCurrent.listFiles();
+			for (int i = 0; i < fileList.length; i++) {
+
+				if (fileList[i].isDirectory())
+					dirlist.push(fileList[i]);
+				else
+					result += fileList[i].length();
+			}
+		}
+		Log.d("downloads", "dir: " + tdir + " result: " + result);
+	}
+
+	// gak dipake
 	public void createMP() {
 		mediaPlayer = new MediaPlayer();
 		mediaPlayer.setOnBufferingUpdateListener(this);
 		mediaPlayer.setOnCompletionListener(this);
 	}
 
-	@Override
-	protected void onDestroy() {
-		// TODO Auto-generated method stub
-		super.onDestroy();
-		mediaPlayer.release();
-	}
-
-	@Override
-	public void onPrepared(MediaPlayer mp) {
-		// TODO Auto-generated method stub		
-		Log.d("Audio", "prepared!!");
-		mp.start();
-		playPause.setImageResource(R.drawable.button_pause);
-		bStart.setText("Pause");
-		primarySeekBarProgressUpdater();
-	}
-	
-	//gak dipake
+	// gak dipake
 	@Override
 	public void onClick(View v) {
 		// TODO Auto-generated method stub
-		Log.d("ABC", "start " + System.currentTimeMillis());
-		String url = AlkitabAudio.getAudioURL(S.activeBook, chapter_1);
-		String title = S.reference(S.activeBook, chapter_1);
 
-		Log.d("Audio", url);
-		Log.d("Audio", title);
+		/*
+		 * Log.d("ABC", "start " + System.currentTimeMillis()); String url =
+		 * AlkitabAudio.getAudioURL(S.activeBook, chapter_1); String title =
+		 * S.reference(S.activeBook, chapter_1);
+		 * 
+		 * Log.d("Audio", url); Log.d("Audio", title);
+		 * 
+		 * if (v.getId() == R.id.ButtonPlayPause) { /** ImageButton onClick
+		 * event handler. Method which start/pause mediaplayer playing
+		 */
 
-		if (v.getId() == R.id.ButtonPlayPause) {
-			/**
-			 * ImageButton onClick event handler. Method which start/pause
-			 * mediaplayer playing
-			 */
+		// if (checkURL(url)) {
+		// getDataSource(url);
+		// play(url);
 
-			if (checkURL(url)) {
-//				getDataSource(url);
-				// play(url);
+		// try {
+		// createFile(url);
+		/*
+		 * if (mediaPlayer == null) { mediaPlayer = new MediaPlayer(); } else {
+		 * mediaPlayer.stop(); mediaPlayer.reset(); }
+		 * mediaPlayer.setDataSource(url); // Go to Initialized state
+		 * mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
+		 * mediaPlayer.setOnPreparedListener(this);
+		 * mediaPlayer.setOnBufferingUpdateListener(this);
+		 * 
+		 * mediaPlayer.prepareAsync();
+		 * 
+		 * if (mediaPlayer.isPlaying()) { mediaPlayer.pause();
+		 * playPause.setImageResource(R.drawable.button_play); }else
+		 * playPause.setImageResource(R.drawable.button_pause);
+		 * 
+		 * 
+		 * 
+		 * try {
+		 */
+		// setup song from
+		// URL to mediaplayer data source
+		// if (mpSet == false){
 
-				// try {
-				// createFile(url);
-				/*
-				 * if (mediaPlayer == null) { mediaPlayer = new MediaPlayer(); }
-				 * else { mediaPlayer.stop(); mediaPlayer.reset(); }
-				 * mediaPlayer.setDataSource(url); // Go to Initialized state
-				 * mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
-				 * mediaPlayer.setOnPreparedListener(this);
-				 * mediaPlayer.setOnBufferingUpdateListener(this);
-				 * 
-				 * mediaPlayer.prepareAsync();
-				 * 
-				 * if (mediaPlayer.isPlaying()) { mediaPlayer.pause();
-				 * playPause.setImageResource(R.drawable.button_play); }else
-				 * playPause.setImageResource(R.drawable.button_pause);
-				 * 
-				 * 
-				 * 
-				 * try {
-				 */
-				// setup song from
-				// URL to mediaplayer data source
-				// if (mpSet == false){
+		/*
+		 * long fileSize = entity.getContentLength();
+		 * 
+		 * File tmp = new File(Environment.getExternalStorageDirectory(),
+		 * "bible/tmp/");
+		 * 
+		 * //create download file downloadFile =
+		 * File.createTempFile("downloaded", ".mp3", tmp);
+		 * 
+		 * byte buf[] = new byte[16384]; int totalBytesRead = 0; int
+		 * incrementBytes = 0;
+		 * 
+		 * while (notInterrupted()){ int nread = content.read(buf); if (nread <=
+		 * 0) break; else { out.write(buf, 0, nread);
+		 * 
+		 * totalBytesRead += nread; incrementBytes += nread; totalKbRead =
+		 * totalBytesRead/1024;
+		 * 
+		 * testMediaBuffer(); fireDataLoadUpdate(); } // Log.d("download", "" +
+		 * totalBytesRead + " " + incrementBytes); getDirSize(tmp); }
+		 * content.close();
+		 */
 
-				/*
-				 * long fileSize = entity.getContentLength();
-				 * 
-				 * File tmp = new
-				 * File(Environment.getExternalStorageDirectory(),
-				 * "bible/tmp/");
-				 * 
-				 * //create download file downloadFile =
-				 * File.createTempFile("downloaded", ".mp3", tmp);
-				 * 
-				 * byte buf[] = new byte[16384]; int totalBytesRead = 0; int
-				 * incrementBytes = 0;
-				 * 
-				 * while (notInterrupted()){ int nread = content.read(buf); if
-				 * (nread <= 0) break; else { out.write(buf, 0, nread);
-				 * 
-				 * totalBytesRead += nread; incrementBytes += nread; totalKbRead
-				 * = totalBytesRead/1024;
-				 * 
-				 * testMediaBuffer(); fireDataLoadUpdate(); } //
-				 * Log.d("download", "" + totalBytesRead + " " +
-				 * incrementBytes); getDirSize(tmp); } content.close();
-				 */
-
-				/*
-				 * mediaPlayer.setDataSource(url);
-				 * mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
-				 * mediaPlayer .setOnPreparedListener((OnPreparedListener)
-				 * this); // you must call this method after setup the
-				 * datasource in // setDataSource method. After calling
-				 * prepare() the // instance of MediaPlayer starts load data
-				 * from URL to // internal buffer. mediaPlayer.prepareAsync();
-				 * 
-				 * // gets the song length in milliseconds from URL
-				 * mediaFileLength = mediaPlayer.getDuration(); mpSet = true;
-				 * }else { if (!mediaPlayer.isPlaying()) { mediaPlayer.start();
-				 * playPause.setImageResource(R.drawable.button_pause); } else {
-				 * mediaPlayer.pause();
-				 * playPause.setImageResource(R.drawable.button_play); } }
-				 * 
-				 * 
-				 * primarySeekBarProgressUpdater();
-				 * 
-				 * } catch (Exception e) { e.printStackTrace(); }
-				 */
-			} else {
-				Log.d("Audio", "Tidak Bisa");
-				new AlertDialog.Builder(IsiActivity.this).setTitle("Audio")
-						.setMessage("Audio tidak tersedia untuk " + title)
-						.setPositiveButton("OK", null).show();
-			}
-		}
+		/*
+		 * mediaPlayer.setDataSource(url);
+		 * mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
+		 * mediaPlayer .setOnPreparedListener((OnPreparedListener) this); // you
+		 * must call this method after setup the datasource in // setDataSource
+		 * method. After calling prepare() the // instance of MediaPlayer starts
+		 * load data from URL to // internal buffer. mediaPlayer.prepareAsync();
+		 * 
+		 * // gets the song length in milliseconds from URL mediaFileLength =
+		 * mediaPlayer.getDuration(); mpSet = true; }else { if
+		 * (!mediaPlayer.isPlaying()) { mediaPlayer.start();
+		 * playPause.setImageResource(R.drawable.button_pause); } else {
+		 * mediaPlayer.pause();
+		 * playPause.setImageResource(R.drawable.button_play); } }
+		 * 
+		 * 
+		 * primarySeekBarProgressUpdater();
+		 * 
+		 * } catch (Exception e) { e.printStackTrace(); }
+		 */
+		/*
+		 * } else { Log.d("Audio", "Tidak Bisa"); new
+		 * AlertDialog.Builder(IsiActivity.this).setTitle("Audio")
+		 * .setMessage("Audio tidak tersedia untuk " + title)
+		 * .setPositiveButton("OK", null).show(); } }
+		 */
 	}
 
 }
