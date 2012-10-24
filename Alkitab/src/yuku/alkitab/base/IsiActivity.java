@@ -22,6 +22,7 @@ import android.nfc.NdefRecord;
 import android.nfc.NfcAdapter;
 import android.nfc.NfcAdapter.CreateNdefMessageCallback;
 import android.nfc.NfcEvent;
+import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
@@ -1732,59 +1733,78 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 		return false;
 	}
 
-	public static boolean checkURL(String URLName) {
-		String resp = null;
-		boolean stat = false;
-		long startTime = System.currentTimeMillis();
-		try {
-			URL u = new URL(URLName);
-			HttpURLConnection huc = (HttpURLConnection) u.openConnection();
-			huc.setRequestMethod("GET");
-			huc.connect();
-			resp = huc.getResponseMessage();
-			if ((resp.equals(null)) || (resp.equals("Not Found"))) {
-				stat = false;
-			} else {
-				stat = true;
-			}
-		} catch (IOException e) {
-			e.printStackTrace();
-			stat = false;
-		}
+	private class mAsync extends AsyncTask<String, Void, Boolean>{		
 
-		long endTime = System.currentTimeMillis() - startTime;
-		Log.d("info", "resp " + resp);
-		Log.d("info", "time " + endTime);
-		return stat;
+		@Override
+		protected Boolean doInBackground(String... url) {
+			// TODO Auto-generated method stub
+			boolean stat;
+			try {	
+				long startTime = System.currentTimeMillis();
+				
+				URL u = new URL(url[0]);
+				HttpURLConnection huc = (HttpURLConnection) u.openConnection();
+				huc.setRequestMethod("GET");
+				huc.connect();
+				int resp = huc.getResponseCode();
+				if (resp == HttpURLConnection.HTTP_OK) {
+					stat = true;
+				} else {
+					stat = false;
+				}
+				Log.d("info", "resp " + resp + " " + stat);
+				long endTime = System.currentTimeMillis() - startTime;	
+				Log.d("info", "time " + endTime);
+				
+				return stat;										
+			} catch (MalformedURLException e) {
+				e.printStackTrace();
+				return false;
+			} catch (IOException e) {
+				e.printStackTrace();
+				return false;
+			}			
+		}
+		@Override
+		protected void onPostExecute(Boolean result) {
+			// TODO Auto-generated method stub
+			super.onPostExecute(result);
+			
+			final String title = S.reference(S.activeBook, chapter_1);
+			
+			if (result == true){
+				Log.d("info", "true");
+				startStream();
+			} else {
+				Log.d("info", "Tidak Bisa");
+				new AlertDialog.Builder(IsiActivity.this).setTitle("Audio")
+						.setMessage("Audio tidak tersedia untuk " + title)
+						.setPositiveButton("OK", null).show();
+			}
+		}				
 	}
 
 	public void startStream() {
 		final String url = AlkitabAudio.getAudioURL(S.activeBook, chapter_1);
-		String title = S.reference(S.activeBook, chapter_1);
+		
+		Runnable r = new Runnable() {
+			
+			@Override
+			public void run() {
+				// TODO Auto-generated method stub
+				Log.d("info", "Running!");
+				createFile(url);
+			}
+		};
+		new Thread(r).start();
 
-		Log.d("Audio", url);
-		Log.d("Audio", title);
-
-		if (checkURL(url)) {
-			Runnable r = new Runnable() {
-				public void run() {
-					Log.d("info", "Running!");
-					createFile(url);
-				}
-			};
-			new Thread(r).start();
-		} else {
-			Log.d("Audio", "Tidak Bisa");
-			new AlertDialog.Builder(IsiActivity.this).setTitle("Audio")
-					.setMessage("Audio tidak tersedia untuk " + title)
-					.setPositiveButton("OK", null).show();
-		}
-	}
+	}	
 
 	public void bStart_onClick(View v) throws IOException {
 		Log.d("info", "" + mpSet);
 		if (mpSet == false) {
-			startStream();
+			String url = AlkitabAudio.getAudioURL(S.activeBook, chapter_1);
+			new mAsync().execute(url);						
 			isInterrupted = false;
 			playPause.setEnabled(false);
 		} else {
@@ -1826,6 +1846,8 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 			int totalBytesRead = 0;
 			int incrementBytes = 0;
 
+			mpSet = true;
+			
 			while (notInterrupted()) {
 				nread = content.read(buf);
 				if (nread <= 0)
@@ -1843,7 +1865,7 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 			// fireDataFullyLoaded();
 			content.close();
 			out.close();
-			if (notInterrupted()){
+			if (notInterrupted()) {
 				fireDataFullyLoaded();
 			}
 
@@ -1876,6 +1898,7 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 	private void testMediaBuffer() {
 		Runnable updater = new Runnable() {
 			public void run() {
+				Log.d("info ", "" + totalKbRead);				
 				if (mediaPlayer == null) {
 					// Only create the MediaPlayer once we have the minimum
 					// buffered data
@@ -1883,8 +1906,7 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 						try {
 							startMediaPlayer();
 						} catch (Exception e) {
-							Log.e(getClass().getName(),
-									"Error copying buffered conent.", e);
+							Log.e("info", "Error copying buffered conent.", e);
 						}
 					}
 				} else if (mediaPlayer.getDuration()
@@ -1895,6 +1917,9 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 					// can stop when there is still
 					// a few milliseconds of data left to play
 					transferBufferToMediaPlayer();
+				} else {
+					
+					Log.d("info ", "" + totalKbRead);
 				}
 			}
 		};
@@ -1921,8 +1946,6 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 			mediaPlayer.setAudioStreamType(AudioManager.STREAM_MUSIC);
 			mediaPlayer.setOnPreparedListener(this);
 			mediaPlayer.prepare();
-
-			mpSet = true;
 
 			// mediaPlayer.start();
 
@@ -1999,7 +2022,7 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 
 			mediaPlayer = createMediaPlayer(bufferedFile.getAbsolutePath());
 			mediaPlayer.setOnPreparedListener(this);
-
+			
 			/*
 			 * mediaPlayer = new MediaPlayer(); FileInputStream fis = new
 			 * FileInputStream(bufferedFile); // createMP();
