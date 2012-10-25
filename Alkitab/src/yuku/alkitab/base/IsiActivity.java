@@ -40,6 +40,7 @@ import android.view.ViewGroup;
 import android.view.animation.Animation;
 import android.view.animation.Animation.AnimationListener;
 import android.view.animation.AnimationUtils;
+import android.webkit.URLUtil;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
 import android.widget.BaseAdapter;
@@ -1532,10 +1533,9 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 		if (mediaPlayer != null) {
 			if (mediaPlayer.isPlaying()) {
 				mediaPlayer.stop();
-			}			
-			mediaFileLength = 0;
-			
+			}					
 			mediaPlayer.reset();
+			mediaFileLength = 0;
 //			mediaPlayer.release();			
 		} else {
 			Log.d("info", "MediaPlayer Null!!");
@@ -1747,17 +1747,19 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 	}
 
 	private class mAsync extends AsyncTask<String, Void, Integer>{		
-
+		
 		@Override
 		protected Integer doInBackground(String... url) {
 			// TODO Auto-generated method stub
+			
 			try {	
 				long startTime = System.currentTimeMillis();
 				
 				URL u = new URL(url[0]);
 				HttpURLConnection huc = (HttpURLConnection) u.openConnection();
 				huc.setRequestMethod("GET");
-				huc.connect();
+				huc.connect();								
+								
 				int resp = huc.getResponseCode();
 				
 				Log.d("info", "resp " + resp);
@@ -1790,10 +1792,16 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 						.setPositiveButton("OK", null).show();
 			} else {
 				new AlertDialog.Builder(IsiActivity.this).setTitle("Audio")
-				.setMessage("Koneksi internet tidak ada")
+				.setMessage("Koneksi internet gagal")
 				.setPositiveButton("OK", null).show();
 			}
 		}				
+	}
+	
+	public String parseFileName(String fName){
+		int lastSlash = fName.lastIndexOf("/");
+//		int extension = fName.lastIndexOf(".");					
+		return fName.substring(lastSlash + 1);//, extension);
 	}
 
 	public void startStream() {
@@ -1818,8 +1826,10 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 		if (mpSet == false) {
 			String url = AlkitabAudio.getAudioURL(S.activeBook, chapter_1);
 			isInterrupted = false;
-			new mAsync().execute(url);									
-			playPause.setEnabled(false);
+			if (checkFileDownloaded(url) == false) {
+				new mAsync().execute(url);									
+				playPause.setEnabled(false);
+			}			
 		} else {
 			if (!mediaPlayer.isPlaying()) {
 				mediaPlayer.start();
@@ -1831,13 +1841,26 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 		}
 	}
 
+	public boolean checkFileDownloaded(String url){
+		boolean hasil;
+		String fileName = parseFileName(url);		
+		File downloadedFileName = new File(Environment.getExternalStorageDirectory(),"bible/audio/" + fileName);
+		if (downloadedFileName.exists()) {
+			hasil = true;
+		} else {
+			hasil = false;
+		}			
+		Log.d("info", "check file: " + hasil);
+		return hasil;
+	}
+	
 	public void createFile(String url) {
 		try {
 			long startTime = System.currentTimeMillis();
-			SimpleHttpConnection conn = new SimpleHttpConnection(url);
+			SimpleHttpConnection conn = new SimpleHttpConnection(url);					
 
 			InputStream content = conn.load();
-
+						
 			if (content == null) {
 				Log.e(getClass().getName(),
 						"Unable to create InputStream for mediaUrl:" + url);
@@ -1854,9 +1877,14 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 			File dir = new File(Environment.getExternalStorageDirectory(),"bible/audio");
 			if (!dir.exists()) {
 				dir.mkdir();
-			}			
+			}
+			
+			String fName = parseFileName(url);
+			
 			downloadFile = new File(Environment.getExternalStorageDirectory(),
-					"bible/audio/downloaded" + (counter++) + ".mp3");
+					"bible/audio/" + fName + ".tmp" + (counter++));	
+			
+			Log.d("info", downloadFile.getAbsolutePath());
 
 			// if (downloadFile.exists()) downloadFile.delete();
 
@@ -1904,7 +1932,7 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 	private boolean notInterrupted() {
 		if (isInterrupted) {
 			if (mediaPlayer != null) {
-				mediaPlayer.pause();
+				if (mediaPlayer.isPlaying()) mediaPlayer.stop();
 				// mediaPlayer.release();
 			}	
 			Log.d("info", "interrupted!!");
@@ -2033,10 +2061,17 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 		Runnable updater = new Runnable() {
 			public void run() {
 				transferBufferToMediaPlayer();
+				
+				int ext = downloadFile.getName().lastIndexOf("."); 
+				String newName = downloadFile.getName().substring(0, ext);
+				File newPath = new File(Environment.getExternalStorageDirectory(), "bible/audio/" + newName);	
+				
+//				Log.d("info", "new name " + newName);
+				downloadFile.renameTo(newPath);
 
 				// Delete the downloaded File as it's now been transferred to
 				// the currently playing buffer file.
-				downloadFile.delete();
+//				downloadFile.delete();
 				tProgress.setText(totalKbRead + " of " + mediaLengthInKb
 						+ " Kb");
 			}
@@ -2103,7 +2138,7 @@ public class IsiActivity extends BaseActivity implements OnClickListener,
 					- mediaPlayer.getCurrentPosition() <= 1000;
 			if (wasPlaying || atEndOfFile) {
 				mediaPlayer.start();
-				Log.d("testdownload", "Its Starting!!");
+				Log.d("info", "Its Starting2!!");
 			}
 
 			// Lastly delete the previously playing buffered File as it's no
