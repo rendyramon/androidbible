@@ -36,10 +36,12 @@
             android:background="#000"
             tools:ignore="PxUsage" />
     </LinearLayout>
+
     <RelativeLayout
         android:id="@+id/audioPlayer"
         android:layout_width="match_parent"
         android:layout_height="50dp"
+        android:layout_weight="0.01"
         android:focusable="true"
         android:visibility="gone" >
 
@@ -49,21 +51,7 @@
             android:layout_height="wrap_content"
             android:layout_alignParentBottom="true"
             android:layout_alignParentLeft="true"
-            android:minHeight="10dip"
-            android:thumb="@drawable/thumb_transparent" />
-
-
-        <ImageButton
-            android:id="@+id/ButtonPlayPause"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_above="@+id/SeekBarPlay"
-            android:layout_alignParentLeft="true"
-            android:layout_marginLeft="18dp"
-            android:onClick="bStart_onClick"
-            android:src="@drawable/button_play" />
-
-
+            android:minHeight="10dip" />
 
         <TextView
             android:id="@+id/tProgress"
@@ -73,6 +61,17 @@
             android:layout_marginLeft="15dp"
             android:layout_toRightOf="@+id/ButtonPlayPause"
             android:text="0.0 kb" />
+
+        <ImageButton
+            android:id="@+id/ButtonPlayPause"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignBottom="@+id/tProgress"
+            android:layout_alignParentLeft="true"
+            android:layout_alignParentTop="true"
+            android:layout_marginLeft="140dp"
+            android:onClick="bStart_onClick"
+            android:src="@drawable/ic_action_play" />
 
     </RelativeLayout>
 

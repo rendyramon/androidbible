@@ -1,44 +1,9 @@
 package yuku.alkitab.base;
 
-import android.annotation.TargetApi;
-import android.app.AlertDialog;
-import android.app.PendingIntent;
-import android.content.DialogInterface;
-import android.content.Intent;
-import android.content.IntentFilter;
-import android.content.IntentFilter.MalformedMimeTypeException;
-import android.content.SharedPreferences;
-import android.content.SharedPreferences.Editor;
-import android.content.pm.PackageManager.NameNotFoundException;
-import android.net.Uri;
-import android.nfc.NdefMessage;
-import android.nfc.NdefRecord;
-import android.nfc.NfcAdapter;
-import android.nfc.NfcAdapter.CreateNdefMessageCallback;
-import android.nfc.NfcEvent;
-import android.os.Build;
-import android.os.Bundle;
-import android.os.Parcelable;
-import android.util.Log;
-import android.util.SparseBooleanArray;
-import android.view.KeyEvent;
-import android.view.LayoutInflater;
-import android.view.View;
-import android.view.View.OnClickListener;
-import android.view.ViewGroup;
-import android.view.animation.Animation;
-import android.view.animation.Animation.AnimationListener;
-import android.view.animation.AnimationUtils;
-import android.widget.AdapterView;
-import android.widget.AdapterView.OnItemClickListener;
-import android.widget.BaseAdapter;
-import android.widget.Button;
-import android.widget.ImageButton;
-import android.widget.ListAdapter;
-import android.widget.ListView;
-import android.widget.TextView;
-import android.widget.Toast;
-
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -69,6 +34,7 @@ import yuku.alkitab.base.config.BuildConfig;
 import yuku.alkitab.base.dialog.TypeBookmarkDialog;
 import yuku.alkitab.base.dialog.TypeHighlightDialog;
 import yuku.alkitab.base.dialog.TypeNoteDialog;
+import yuku.alkitab.base.media.AlkitabAudio;
 import yuku.alkitab.base.model.Ari;
 import yuku.alkitab.base.model.Book;
 import yuku.alkitab.base.model.PericopeBlock;
@@ -81,11 +47,58 @@ import yuku.alkitab.base.util.LidToAri;
 import yuku.alkitab.base.util.Search2Engine.Query;
 import yuku.alkitab.base.widget.CallbackSpan;
 import yuku.alkitab.base.widget.VerseAdapter;
+import android.annotation.TargetApi;
+import android.app.AlertDialog;
+import android.app.PendingIntent;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.IntentFilter.MalformedMimeTypeException;
+import android.content.SharedPreferences;
+import android.content.SharedPreferences.Editor;
+import android.content.pm.PackageManager.NameNotFoundException;
+import android.media.MediaPlayer;
+import android.media.MediaPlayer.OnBufferingUpdateListener;
+import android.media.MediaPlayer.OnCompletionListener;
+import android.media.MediaPlayer.OnPreparedListener;
+import android.net.Uri;
+import android.nfc.NdefMessage;
+import android.nfc.NdefRecord;
+import android.nfc.NfcAdapter;
+import android.nfc.NfcAdapter.CreateNdefMessageCallback;
+import android.nfc.NfcEvent;
+import android.os.AsyncTask;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Parcelable;
+import android.util.Log;
+import android.util.SparseBooleanArray;
+import android.view.KeyEvent;
+import android.view.LayoutInflater;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.view.View.OnTouchListener;
+import android.view.ViewGroup;
+import android.view.animation.Animation;
+import android.view.animation.Animation.AnimationListener;
+import android.view.animation.AnimationUtils;
+import android.widget.AdapterView;
+import android.widget.AdapterView.OnItemClickListener;
+import android.widget.BaseAdapter;
+import android.widget.Button;
+import android.widget.ImageButton;
+import android.widget.ListAdapter;
+import android.widget.ListView;
+import android.widget.SeekBar;
+import android.widget.TextView;
+import android.widget.Toast;
 
 import com.actionbarsherlock.view.Menu;
 import com.actionbarsherlock.view.MenuItem;
 
-public class IsiActivity extends BaseActivity {
+public class IsiActivity extends BaseActivity implements OnTouchListener, OnBufferingUpdateListener, OnCompletionListener, OnPreparedListener {
 	public static final String TAG = IsiActivity.class.getSimpleName();
 	
 	// The followings are for instant_pref
@@ -107,15 +120,22 @@ public class IsiActivity extends BaseActivity {
 	private static final int REQCODE_songs = 8;
 
 	private static final String EXTRA_verseUrl = "urlAyat"; //$NON-NLS-1$
+	private int mediaFileLength;
+	private boolean mpSet = false;
+	private boolean isInterrupted = false;
 
 	ListView lsText;
 	Button bGoto;
 	ImageButton bLeft;
 	ImageButton bRight;
+	ImageButton playPause;
 	View titleContainer;
 	TextView lTitle;
 	View bContextMenu;
 	View root;
+	View aPlayer;
+	SeekBar seek;
+	MediaPlayer mPlayer;
 	
 	int chapter_1 = 0;
 	SharedPreferences instant_pref;
@@ -158,6 +178,16 @@ public class IsiActivity extends BaseActivity {
 		bContextMenu = V.get(this, R.id.bContext);
 		root = V.get(this, R.id.root);
 		
+		//audio player
+		aPlayer = V.get(this, R.id.audioPlayer);
+		playPause = V.get(this, R.id.ButtonPlayPause);
+		seek = V.get(this, R.id.SeekBarPlay);
+		seek.setOnTouchListener(this);
+		
+		mPlayer = new MediaPlayer();
+		mPlayer.setOnBufferingUpdateListener(this);
+		mPlayer.setOnCompletionListener(this);
+		mPlayer.setOnPreparedListener(this);
 		applyPreferences(false);
 
 		lsText.setOnItemClickListener(lsText_itemClick);
@@ -1061,6 +1091,12 @@ public class IsiActivity extends BaseActivity {
 		case R.id.menuSongs: 
 			startActivityForResult(SongViewActivity.createIntent(), REQCODE_songs);
 			return true;
+		case R.id.menuAudio:
+			if (aPlayer.isShown())
+				aPlayer.setVisibility(View.GONE);
+			else
+				aPlayer.setVisibility(View.VISIBLE);
+			return true;
 		case R.id.menuTentang:
 			startActivity(new Intent(this, AboutActivity.class));
 			return true;
@@ -1301,6 +1337,18 @@ public class IsiActivity extends BaseActivity {
 		lTitle.setText(title);
 		bGoto.setText(title);
 		
+		//TODO reset player when display different chapter
+		if (!mPlayer.isPlaying()) {
+			mPlayer.stop();			
+		}
+		isInterrupted = false;
+		
+		playPause.setEnabled(true);
+		playPause.setImageResource(R.drawable.ic_action_play);
+		mPlayer.reset();
+		mpSet = false;
+		seek.setSecondaryProgress(0);
+		
 		return Ari.encode(0, chapter_1, verse_1);
 	}
 
@@ -1412,4 +1460,156 @@ public class IsiActivity extends BaseActivity {
 			}
 		}
 	}
+
+	//audio
+	
+	private class mAsync extends AsyncTask<String, Void, Integer>{		
+		
+		@Override
+		protected Integer doInBackground(String... url) {
+			
+			try {	
+				long startTime = System.currentTimeMillis();
+				Log.d("Audio", "start " + startTime);
+				
+				URL u = new URL(url[0]);
+				HttpURLConnection huc = (HttpURLConnection) u.openConnection();
+				huc.setRequestMethod("GET");
+				huc.connect();								
+								
+				int resp = huc.getResponseCode();
+				
+				Log.d("Audio", "resp " + resp);
+				long endTime = System.currentTimeMillis() - startTime;	
+
+				Log.d("Audio", "time " + endTime);
+				
+				return resp;										
+			} catch (MalformedURLException e) {
+				e.printStackTrace();
+				return -1;
+			} catch (IOException e) {
+				e.printStackTrace();
+				return -1;
+			}			
+		}
+		@Override
+		protected void onPostExecute(Integer result) {
+			super.onPostExecute(result);
+			
+			final String title = S.reference(S.activeBook, chapter_1);
+			
+			if (result.equals(HttpURLConnection.HTTP_OK)){
+				Log.d("Audio", "true");
+				startStream();
+			} else if (result.equals(404)) {
+				Log.d("Audio", "Tidak Bisa");
+				new AlertDialog.Builder(IsiActivity.this).setTitle("Audio")
+						.setMessage("Audio tidak tersedia untuk " + title)
+						.setPositiveButton("OK", null).show();
+				playPause.setEnabled(true);
+			} else {
+				new AlertDialog.Builder(IsiActivity.this).setTitle("Audio")
+				.setMessage("Koneksi internet gagal")
+				.setPositiveButton("OK", null).show();
+				playPause.setEnabled(true);
+			}
+		}				
+	}
+	
+	public void bStart_onClick(View v){
+		if (mpSet == false){
+			String url = AlkitabAudio.getAudioURL(S.activeBook, chapter_1);
+			isInterrupted = false;
+			mpSet = true;
+			playPause.setEnabled(false);
+			new mAsync().execute(url);
+		} else {
+			if (!mPlayer.isPlaying()){
+				mPlayer.start();
+				playPause.setImageResource(R.drawable.ic_action_pause);
+				primarySeekBarProgressUpdater();
+			} else {
+				mPlayer.pause();
+				playPause.setImageResource(R.drawable.ic_action_play);
+			}
+		}
+	}
+	
+	@Override
+	public void onPrepared(MediaPlayer mp) {
+		mediaFileLength = mPlayer.getDuration();
+		mPlayer.start();
+		playPause.setEnabled(true);
+		playPause.setImageResource(R.drawable.ic_action_pause);
+		primarySeekBarProgressUpdater();
+	}
+
+	@Override
+	public boolean onTouch(View v, MotionEvent event) {
+		if (v.getId() == R.id.SeekBarPlay) {
+			SeekBar sb = (SeekBar) v;
+			int playPositionInMillisecconds = (mediaFileLength / 100)
+					* sb.getProgress();
+			mPlayer.seekTo(playPositionInMillisecconds);
+		}
+		return false;
+	}
+	
+	@Override
+	public void onBufferingUpdate(MediaPlayer mp, int percent) {
+		seek.setSecondaryProgress(percent);
+	}
+
+	@Override
+	public void onCompletion(MediaPlayer mp) {
+		playPause.setImageResource(R.drawable.ic_action_play);
+	}
+	
+		
+	public void startStream(){
+		final String url = AlkitabAudio.getAudioURL(S.activeBook, chapter_1);
+		try {
+			mPlayer.setDataSource(url);
+			mPlayer.prepareAsync();
+			
+			primarySeekBarProgressUpdater();
+			
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+	
+	private void primarySeekBarProgressUpdater() {
+		if (isInterrupted == false){
+			if (mPlayer != null) {
+				Log.d("Audio", "not null");
+				Handler handler = new Handler();
+
+				seek.setProgress((int) (((float) mPlayer.getCurrentPosition() / mediaFileLength) * 100)); // This
+																											// "was playing"/"song length"
+				if (mPlayer.isPlaying()) {
+					Runnable notification = new Runnable() {
+						public void run() {
+							primarySeekBarProgressUpdater();
+						}
+					};
+					handler.postDelayed(notification, 1000);
+				}
+			}			
+		}
+
+
+	}
+	
+	@Override
+	protected void onDestroy() {
+		super.onDestroy();
+		isInterrupted = true;
+		if (mPlayer != null){
+			if (mPlayer.isPlaying()) mPlayer.stop();
+			mPlayer.release();			
+		}
+	}
+
 }

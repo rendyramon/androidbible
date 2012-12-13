@@ -1,7 +1,5 @@
 package yuku.alkitab.base.media;
 
-import android.util.Log;
-import yuku.alkitab.base.S;
 import yuku.alkitab.base.model.Book;
 
 public class AlkitabAudio {
@@ -31,8 +29,6 @@ public class AlkitabAudio {
 		
 		String shortname = judul.substring(0, 3);
 		String chap = "";
-		
-		Log.d("Audio", "Chap: " + chap);
 		
 		if (chapter < 10) chap = "0" + chap + chapter;		
 		else chap = "" + chapter;

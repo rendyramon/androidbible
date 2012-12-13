@@ -1,9 +1,5 @@
 package yuku.alkitab.base.config;
 
-import android.content.Context;
-import android.content.res.XmlResourceParser;
-import android.util.Log;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -11,6 +7,9 @@ import org.xmlpull.v1.XmlPullParser;
 
 import yuku.alkitab.base.ac.VersionsActivity.MVersionPreset;
 import yuku.alkitab.base.storage.Db;
+import android.content.Context;
+import android.content.res.XmlResourceParser;
+import android.util.Log;
 
 public class BuildConfig {
 	public static final String TAG = BuildConfig.class.getSimpleName();
@@ -28,6 +27,7 @@ public class BuildConfig {
 	public String url_prefix;
 	public String url_format;
 	public String[] url_namaKitabStandar;
+
 	
 	private static BuildConfig lastConfig;
 	private static String lastPackageName;
