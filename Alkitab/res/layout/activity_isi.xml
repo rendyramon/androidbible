@@ -41,35 +41,50 @@
         android:id="@+id/audioPlayer"
         android:layout_width="match_parent"
         android:layout_height="50dp"
-        android:layout_weight="0.01"
+        android:layout_weight="0.07"
         android:focusable="true"
-        android:visibility="gone" >
-
-        <SeekBar
-            android:id="@+id/SeekBarPlay"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_alignParentBottom="true"
-            android:layout_alignParentLeft="true"
-            android:minHeight="10dip" />
+        android:visibility="visible" >
 
         <TextView
             android:id="@+id/tProgress"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_centerVertical="true"
+            android:layout_alignParentTop="true"
             android:layout_marginLeft="15dp"
+            android:layout_marginTop="10dp"
             android:layout_toRightOf="@+id/ButtonPlayPause"
-            android:text="0.0 kb" />
+            android:text="0:00 - 0:00" />
+
+        <ProgressBar
+            android:id="@+id/progressBar1"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignLeft="@+id/tProgress"
+            android:layout_alignParentRight="true"
+            android:layout_centerVertical="true"
+            android:layout_marginRight="22dp"
+            android:visibility="gone" />
+
+        <SeekBar
+            android:id="@+id/SeekBarPlay"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+			android:layout_toRightOf="@+id/ButtonPlayPause"
+            android:layout_alignParentRight="true"
+            android:layout_alignBottom="@+id/ButtonPlayPause"
+            android:layout_centerVertical="true"
+            android:layout_marginLeft="10dp"
+            android:minHeight="10dip" />
 
         <ImageButton
             android:id="@+id/ButtonPlayPause"
             android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_alignBottom="@+id/tProgress"
+            android:layout_height="match_parent"
             android:layout_alignParentLeft="true"
-            android:layout_alignParentTop="true"
-            android:layout_marginLeft="140dp"
+            android:layout_marginLeft="12dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginBottom="12dp"
             android:onClick="bStart_onClick"
             android:src="@drawable/ic_action_play" />
 

@@ -91,6 +91,7 @@ import android.widget.Button;
 import android.widget.ImageButton;
 import android.widget.ListAdapter;
 import android.widget.ListView;
+import android.widget.ProgressBar;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -123,7 +124,9 @@ public class IsiActivity extends BaseActivity implements OnTouchListener, OnBuff
 	private int mediaFileLength;
 	private boolean mpSet = false;
 	private boolean isInterrupted = false;
-
+	private boolean isStreaming = false;
+	
+	AsyncTask<String, Void, Integer> connAsync, streamAsync;
 	ListView lsText;
 	Button bGoto;
 	ImageButton bLeft;
@@ -131,11 +134,13 @@ public class IsiActivity extends BaseActivity implements OnTouchListener, OnBuff
 	ImageButton playPause;
 	View titleContainer;
 	TextView lTitle;
+	TextView tProgress;
 	View bContextMenu;
 	View root;
 	View aPlayer;
 	SeekBar seek;
 	MediaPlayer mPlayer;
+	ProgressBar progBar;
 	
 	int chapter_1 = 0;
 	SharedPreferences instant_pref;
@@ -181,6 +186,9 @@ public class IsiActivity extends BaseActivity implements OnTouchListener, OnBuff
 		//audio player
 		aPlayer = V.get(this, R.id.audioPlayer);
 		playPause = V.get(this, R.id.ButtonPlayPause);
+		tProgress = V.get(this, R.id.tProgress);
+		progBar = V.get(this, R.id.progressBar1);
+		
 		seek = V.get(this, R.id.SeekBarPlay);
 		seek.setOnTouchListener(this);
 		
@@ -1280,6 +1288,11 @@ public class IsiActivity extends BaseActivity implements OnTouchListener, OnBuff
 	 * @return Ari that contains only chapter and verse. Book always set to 0.
 	 */
 	int display(int chapter_1, int verse_1, boolean uncheckAllVerses) {
+		if (mPlayer.isPlaying()) {
+			isInterrupted = true;
+			mPlayer.stop();
+			Log.d("Audio", "interrupted");
+		}
 		int current_chapter_1 = this.chapter_1; 
 		
 		if (chapter_1 < 1) chapter_1 = 1;
@@ -1337,17 +1350,24 @@ public class IsiActivity extends BaseActivity implements OnTouchListener, OnBuff
 		lTitle.setText(title);
 		bGoto.setText(title);
 		
-		//TODO reset player when display different chapter
-		if (!mPlayer.isPlaying()) {
-			mPlayer.stop();			
+		// reset player when display different chapter
+		if (isInterrupted){
+			progBar.setIndeterminate(false);
+			progBar.setVisibility(View.GONE);
+			seek.setVisibility(View.VISIBLE);
 		}
-		isInterrupted = false;
 		
-		playPause.setEnabled(true);
-		playPause.setImageResource(R.drawable.ic_action_play);
 		mPlayer.reset();
+		
+		isInterrupted = false;
+		isStreaming = false;
+		tProgress.setText("0:00 - 0:00");
+		mediaFileLength = 0;
+		playPause.setImageResource(R.drawable.ic_action_play);
+		
 		mpSet = false;
 		seek.setSecondaryProgress(0);
+		seek.setProgress(0);
 		
 		return Ari.encode(0, chapter_1, verse_1);
 	}
@@ -1463,7 +1483,16 @@ public class IsiActivity extends BaseActivity implements OnTouchListener, OnBuff
 
 	//audio
 	
+	//check connection
 	private class mAsync extends AsyncTask<String, Void, Integer>{		
+		HttpURLConnection huc;
+		
+		@Override
+		protected void onPreExecute() {
+			super.onPreExecute();
+			seek.setVisibility(View.GONE);
+			progBar.setVisibility(View.VISIBLE);
+		}
 		
 		@Override
 		protected Integer doInBackground(String... url) {
@@ -1472,30 +1501,55 @@ public class IsiActivity extends BaseActivity implements OnTouchListener, OnBuff
 				long startTime = System.currentTimeMillis();
 				Log.d("Audio", "start " + startTime);
 				
-				URL u = new URL(url[0]);
-				HttpURLConnection huc = (HttpURLConnection) u.openConnection();
+				final URL u = new URL(url[0]);
+				huc = (HttpURLConnection) u.openConnection();
+				isStreaming = true;
+				progBar.setIndeterminate(true);
 				huc.setRequestMethod("GET");
-				huc.connect();								
-								
+				huc.setReadTimeout(5000);
+				huc.setConnectTimeout(5000);
+				huc.connect();
+				Log.d("Audio", "connect");
+				long endTime = System.currentTimeMillis() - startTime;
+
 				int resp = huc.getResponseCode();
 				
-				Log.d("Audio", "resp " + resp);
-				long endTime = System.currentTimeMillis() - startTime;	
-
 				Log.d("Audio", "time " + endTime);
 				
-				return resp;										
+				return resp;
+				
 			} catch (MalformedURLException e) {
 				e.printStackTrace();
 				return -1;
-			} catch (IOException e) {
-				e.printStackTrace();
+ 			} catch (IOException e) {
+ 				Log.e("Audio", "gak bisa connect", e);
 				return -1;
-			}			
+			}
 		}
+		
+		@Override
+		protected void onCancelled() {
+			super.onCancelled();
+			huc.disconnect();
+			Log.d("Audio", "oncancelled");
+			return;
+		}
+		
 		@Override
 		protected void onPostExecute(Integer result) {
 			super.onPostExecute(result);
+
+			if (isCancelled()) {
+				new AlertDialog.Builder(IsiActivity.this).setTitle("Audio")
+				.setMessage("Koneksi internet gagal")
+				.setPositiveButton("OK", null).show();
+				playPause.setImageResource(R.drawable.ic_action_play);
+				progBar.setIndeterminate(false);
+				progBar.setVisibility(View.GONE);
+				seek.setVisibility(View.VISIBLE);
+				isStreaming = false;
+				return;
+			}
 			
 			final String title = S.reference(S.activeBook, chapter_1);
 			
@@ -1507,24 +1561,68 @@ public class IsiActivity extends BaseActivity implements OnTouchListener, OnBuff
 				new AlertDialog.Builder(IsiActivity.this).setTitle("Audio")
 						.setMessage("Audio tidak tersedia untuk " + title)
 						.setPositiveButton("OK", null).show();
-				playPause.setEnabled(true);
+				playPause.setImageResource(R.drawable.ic_action_play);
+				progBar.setIndeterminate(false);
+				progBar.setVisibility(View.GONE);
+				seek.setVisibility(View.VISIBLE);
+				isStreaming = false;
 			} else {
 				new AlertDialog.Builder(IsiActivity.this).setTitle("Audio")
 				.setMessage("Koneksi internet gagal")
 				.setPositiveButton("OK", null).show();
-				playPause.setEnabled(true);
+				playPause.setImageResource(R.drawable.ic_action_play);
+				progBar.setIndeterminate(false);
+				progBar.setVisibility(View.GONE);
+				seek.setVisibility(View.VISIBLE);
+				isStreaming = false;
 			}
 		}				
 	}
 	
+	//button play/stop/pause
 	public void bStart_onClick(View v){
-		if (mpSet == false){
-			String url = AlkitabAudio.getAudioURL(S.activeBook, chapter_1);
-			isInterrupted = false;
-			mpSet = true;
-			playPause.setEnabled(false);
-			new mAsync().execute(url);
-		} else {
+		if (mpSet == false){ //player not set
+			if (isStreaming) {//stop
+				if (connAsync.getStatus() == AsyncTask.Status.FINISHED){
+					final Handler h = new Handler();
+					final Runnable running = new Runnable() {
+						
+						@Override
+						public void run() {
+							playPause.setImageResource(R.drawable.ic_action_play);
+							progBar.setIndeterminate(false);
+							progBar.setVisibility(View.GONE);
+							seek.setVisibility(View.VISIBLE);
+						}
+					};
+					
+					new Thread(new Runnable() {
+						
+						@Override
+						public void run() {
+							h.post(running);
+							mPlayer.reset();
+						}
+					}).start();
+					Log.d("Audio", "cek connAsync " + connAsync);
+					Log.d("Audio", "lagi buffering");
+					isStreaming = false;
+					connAsync = null;
+				} else {
+					playPause.setImageResource(R.drawable.ic_action_play);
+					progBar.setIndeterminate(false);
+					progBar.setVisibility(View.GONE);
+					seek.setVisibility(View.VISIBLE);
+					isStreaming = false;
+					connAsync = null;
+				}
+			} else {//play for first time
+				final String url = AlkitabAudio.getAudioURL(S.activeBook, chapter_1);
+				isInterrupted = false;
+				playPause.setImageResource(R.drawable.ic_action_stop);
+				connAsync = new mAsync().execute(url);
+			}
+		} else {//player is set
 			if (!mPlayer.isPlaying()){
 				mPlayer.start();
 				playPause.setImageResource(R.drawable.ic_action_pause);
@@ -1539,6 +1637,11 @@ public class IsiActivity extends BaseActivity implements OnTouchListener, OnBuff
 	@Override
 	public void onPrepared(MediaPlayer mp) {
 		mediaFileLength = mPlayer.getDuration();
+		isStreaming = false;
+		mpSet = true;
+		progBar.setIndeterminate(false);
+		progBar.setVisibility(View.GONE);
+		seek.setVisibility(View.VISIBLE);
 		mPlayer.start();
 		playPause.setEnabled(true);
 		playPause.setImageResource(R.drawable.ic_action_pause);
@@ -1569,25 +1672,34 @@ public class IsiActivity extends BaseActivity implements OnTouchListener, OnBuff
 		
 	public void startStream(){
 		final String url = AlkitabAudio.getAudioURL(S.activeBook, chapter_1);
-		try {
-			mPlayer.setDataSource(url);
-			mPlayer.prepareAsync();
+		Log.d("Audio", "Streaming");
+		Runnable r = new Runnable() {
 			
-			primarySeekBarProgressUpdater();
-			
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
+			@Override
+			public void run() {
+				try {
+					mPlayer.setDataSource(url);
+					mPlayer.prepare();
+					
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+		};
+		new Thread(r).start();
+		
 	}
 	
 	private void primarySeekBarProgressUpdater() {
 		if (isInterrupted == false){
 			if (mPlayer != null) {
-				Log.d("Audio", "not null");
 				Handler handler = new Handler();
+				
+				int curDuration = mPlayer.getCurrentPosition();
 
-				seek.setProgress((int) (((float) mPlayer.getCurrentPosition() / mediaFileLength) * 100)); // This
-																											// "was playing"/"song length"
+				seek.setProgress((int) (((float) curDuration / mediaFileLength) * 100)); // This
+																										  // "was playing"/"song length"
+				tProgress.setText(milliSecondsToTimer(curDuration) + " - " + milliSecondsToTimer(mediaFileLength));
 				if (mPlayer.isPlaying()) {
 					Runnable notification = new Runnable() {
 						public void run() {
@@ -1598,8 +1710,6 @@ public class IsiActivity extends BaseActivity implements OnTouchListener, OnBuff
 				}
 			}			
 		}
-
-
 	}
 	
 	@Override
@@ -1611,5 +1721,30 @@ public class IsiActivity extends BaseActivity implements OnTouchListener, OnBuff
 			mPlayer.release();			
 		}
 	}
+	
+	public String milliSecondsToTimer(long milliseconds){
+        String finalTimerString = "";
+        String secondsString = "";
+ 
+        // Convert total duration into time
+           int hours = (int)( milliseconds / (1000*60*60));
+           int minutes = (int)(milliseconds % (1000*60*60)) / (1000*60);
+           int seconds = (int) ((milliseconds % (1000*60*60)) % (1000*60) / 1000);
+           // Add hours if there
+           if(hours > 0){
+               finalTimerString = hours + ":";
+           }
+ 
+           // Prepending 0 to seconds if it is one digit
+           if(seconds < 10){
+               secondsString = "0" + seconds;
+           }else{
+               secondsString = "" + seconds;}
+ 
+           finalTimerString = finalTimerString + minutes + ":" + secondsString;
+ 
+        // return timer string
+        return finalTimerString;
+    }
 
 }
