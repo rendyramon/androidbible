@@ -1288,11 +1288,6 @@ public class IsiActivity extends BaseActivity implements OnTouchListener, OnBuff
 	 * @return Ari that contains only chapter and verse. Book always set to 0.
 	 */
 	int display(int chapter_1, int verse_1, boolean uncheckAllVerses) {
-		if (mPlayer.isPlaying()) {
-			isInterrupted = true;
-			mPlayer.stop();
-			Log.d("Audio", "interrupted");
-		}
 		int current_chapter_1 = this.chapter_1; 
 		
 		if (chapter_1 < 1) chapter_1 = 1;
@@ -1351,25 +1346,44 @@ public class IsiActivity extends BaseActivity implements OnTouchListener, OnBuff
 		bGoto.setText(title);
 		
 		// reset player when display different chapter
-		if (isInterrupted){
-			progBar.setIndeterminate(false);
-			progBar.setVisibility(View.GONE);
-			seek.setVisibility(View.VISIBLE);
+		if (isStreaming){
+			Log.d("Audio", "interrupted!!!");
+			interruptStreaming();
 		}
 		
-		mPlayer.reset();
-		
-		isInterrupted = false;
-		isStreaming = false;
-		tProgress.setText("0:00 - 0:00");
-		mediaFileLength = 0;
-		playPause.setImageResource(R.drawable.ic_action_play);
-		
-		mpSet = false;
-		seek.setSecondaryProgress(0);
-		seek.setProgress(0);
+		resetPlayerUI();
 		
 		return Ari.encode(0, chapter_1, verse_1);
+	}
+	
+	public void resetPlayerUI(){
+		final Handler hand = new Handler();
+		final Runnable runn = new Runnable() {
+			
+			@Override
+			public void run() {
+				playPause.setImageResource(R.drawable.ic_action_play);
+				seek.setSecondaryProgress(0);
+				seek.setProgress(0);
+				tProgress.setText("0:00 - 0:00");
+			}
+		};
+		
+		new Thread(new Runnable() {
+			
+			@Override
+			public void run() {
+				mediaFileLength = 0;
+				if (mPlayer.isPlaying()){
+					mPlayer.stop();
+				}
+				mPlayer.reset();
+				hand.postDelayed(runn, 500);
+				isInterrupted = false;
+				isStreaming = false;
+				mpSet = false;
+			}
+		}).start();
 	}
 
 	void uncheckAll() {
@@ -1584,38 +1598,18 @@ public class IsiActivity extends BaseActivity implements OnTouchListener, OnBuff
 		if (mpSet == false){ //player not set
 			if (isStreaming) {//stop
 				if (connAsync.getStatus() == AsyncTask.Status.FINISHED){
-					final Handler h = new Handler();
-					final Runnable running = new Runnable() {
-						
-						@Override
-						public void run() {
-							playPause.setImageResource(R.drawable.ic_action_play);
-							progBar.setIndeterminate(false);
-							progBar.setVisibility(View.GONE);
-							seek.setVisibility(View.VISIBLE);
-						}
-					};
-					
-					new Thread(new Runnable() {
-						
-						@Override
-						public void run() {
-							h.post(running);
-							mPlayer.reset();
-						}
-					}).start();
-					Log.d("Audio", "cek connAsync " + connAsync);
-					Log.d("Audio", "lagi buffering");
-					isStreaming = false;
-					connAsync = null;
+					interruptStreaming();
 				} else {
 					playPause.setImageResource(R.drawable.ic_action_play);
 					progBar.setIndeterminate(false);
 					progBar.setVisibility(View.GONE);
 					seek.setVisibility(View.VISIBLE);
-					isStreaming = false;
-					connAsync = null;
+					
 				}
+				
+				isStreaming = false;
+				connAsync = null;
+				
 			} else {//play for first time
 				final String url = AlkitabAudio.getAudioURL(S.activeBook, chapter_1);
 				isInterrupted = false;
@@ -1632,6 +1626,32 @@ public class IsiActivity extends BaseActivity implements OnTouchListener, OnBuff
 				playPause.setImageResource(R.drawable.ic_action_play);
 			}
 		}
+	}
+	
+	//reset player when interrupted while streaming
+	public void interruptStreaming(){
+		final Handler h = new Handler();
+		final Runnable running = new Runnable() {
+			
+			@Override
+			public void run() {
+				playPause.setImageResource(R.drawable.ic_action_play);
+				progBar.setIndeterminate(false);
+				progBar.setVisibility(View.GONE);
+				seek.setVisibility(View.VISIBLE);
+			}
+		};
+		
+		new Thread(new Runnable() {
+			
+			@Override
+			public void run() {
+				h.post(running);
+				mPlayer.reset();
+			}
+		}).start();
+		Log.d("Audio", "cek connAsync " + connAsync.toString());
+		Log.d("Audio", "lagi buffering");
 	}
 	
 	@Override
@@ -1706,7 +1726,7 @@ public class IsiActivity extends BaseActivity implements OnTouchListener, OnBuff
 							primarySeekBarProgressUpdater();
 						}
 					};
-					handler.postDelayed(notification, 1000);
+					handler.postDelayed(notification, 500);
 				}
 			}			
 		}
