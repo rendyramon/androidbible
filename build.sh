@@ -104,6 +104,14 @@ echo 'Copying yuku-android-util...'
 mkdir $BUILD_DIR/yuku-android-util
 cp -R ../yuku-android-util/ $BUILD_DIR/yuku-android-util/
 
+# START BUILD-SPECIFIC
+
+echo 'Copying androidbible-sync/AccountChooserCompat...'
+mkdir -p $BUILD_DIR/androidbible-sync/AccountChooserCompat
+cp -R ../androidbible-sync/AccountChooserCompat/ $BUILD_DIR/androidbible-sync/AccountChooserCompat/
+
+# END BUILD-SPECIFIC
+
 echo "Copying $SUPER_PROJECT_NAME..."
 mkdir $BUILD_DIR/$SUPER_PROJECT_NAME
 cp -R ./ $BUILD_DIR/$SUPER_PROJECT_NAME/
