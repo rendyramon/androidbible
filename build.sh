@@ -110,6 +110,10 @@ echo 'Copying androidbible-sync/AccountChooserCompat...'
 mkdir -p $BUILD_DIR/androidbible-sync/AccountChooserCompat
 cp -R ../androidbible-sync/AccountChooserCompat/ $BUILD_DIR/androidbible-sync/AccountChooserCompat/
 
+echo 'Copying androidbible-sync/AlkitabSyncModel...'
+mkdir -p $BUILD_DIR/androidbible-sync/AlkitabSyncModel
+cp -R ../androidbible-sync/AlkitabSyncModel/ $BUILD_DIR/androidbible-sync/AlkitabSyncModel/
+
 # END BUILD-SPECIFIC
 
 echo "Copying $SUPER_PROJECT_NAME..."
