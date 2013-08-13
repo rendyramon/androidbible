@@ -84,6 +84,7 @@ public class IsiActivity extends BaseActivity {
 
 	DrawerLayout drawer;
 	ActionBarDrawerToggle drawerToggle;
+	View drawerView;
 	ListView navList;
 	SignInButton bGSignIn;
 	TextView tSignedInAs;
@@ -139,6 +140,7 @@ public class IsiActivity extends BaseActivity {
 		setContentView(R.layout.activity_isi);
 
 		drawer = V.get(this, R.id.drawer_layout);
+		drawerView = V.get(this, R.id.drawerView);
 		navList = V.get(this, R.id.drawer);
 		bGSignIn = V.get(this, R.id.bGSignIn);
 		tSignedInAs = V.get(this, R.id.tSignedInAs);
@@ -156,7 +158,8 @@ public class IsiActivity extends BaseActivity {
 			@Override
 			public void onItemClick(AdapterView<?> parent, View view, final int pos, long id) {
 				drawerSelection = pos;
-				drawer.closeDrawer(navList);
+				updateContent();
+				drawer.closeDrawer(drawerView);
 			}
 		});
 
@@ -166,12 +169,6 @@ public class IsiActivity extends BaseActivity {
 				super.onDrawerOpened(drawerView);
 				getSupportActionBar().setTitle(R.string.app_name);
 				getSupportActionBar().setSubtitle(null);
-			}
-
-			@Override
-			public void onDrawerClosed(final View drawerView) {
-				super.onDrawerClosed(drawerView);
-				updateContent();
 			}
 		};
 		drawer.setDrawerListener(drawerToggle);
